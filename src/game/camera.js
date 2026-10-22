@@ -242,7 +242,7 @@ export class CombatCamera {
       this.distT = this.userDist;
       const sp = Math.hypot(player.vel.x, player.vel.z);
       // auto-recenter behind the heading after 1.5 s without look input while running
-      if (input && input.lookIdle > 1.5 && sp > 1.5) {
+      if (input && input.lookIdle > 1.5 && sp > 1.5 && input.move?.y > 0.5 && Math.abs(input.move.x) < 0.15) {
         this.yawT = dampAngle(this.yawT, yawOf(player.vel.x, player.vel.z), 1.5, dt);
       }
       // sun-seeking cinematographer when idle and alone (bible §7.5)

@@ -9,22 +9,23 @@ export function createSoundPanel(game, root, { isAllowed, open, close }) {
       <label>风雨环境<input data-mix="amb" type="range" min="0" max="100" aria-label="风雨环境"></label>
       <label class="cvoice"><input data-voices type="checkbox">招式呼喝<small>合成人声，可按喜好开启</small></label>
       </div><div class="caudiobuttons"><button data-audio="preview">试听</button><button data-audio="mute">静音</button><button data-audio="recover">恢复声音</button></div><p>切换窗口回来后会尝试恢复声音。若仍无声，可点「恢复声音」；M 可快速静音或取消静音。</p></div></div></section>`);
+  const sword = game.swordArts?.panel;
+  if (sword) $('.cssettings').append(sword);
   function showPage(name) {
     for (const pane of root.querySelectorAll('[data-settings-pane]')) pane.hidden = pane.dataset.settingsPane !== name;
     for (const button of root.querySelectorAll('[data-settings]')) button.setAttribute('aria-pressed', String(button.dataset.settings === name));
   }
   function hide() {
     soundOpen = false; $('.caudiopanel').hidden = true;
-    const sword = $('.cssettings .csword');
-    if (sword) root.append(sword);
   }
   function toggleSound() {
     if (!isAllowed() || (game.chapter?.modal && !soundOpen)) return;
     if (soundOpen) { hide(); close(); $('[data-do="audio"]')?.focus({ preventScroll: true }); return; }
     soundOpen = true; open(); $('.caudiopanel').hidden = false;
-    const sword = $('.csword');
-    if (sword) { $('.cssettings').append(sword); sword.hidden = false; }
-    showPage(game.input.touch.enabled ? 'sword' : 'sound');
+    showPage('sword');
+    $('.cssettingstip').textContent = game.input.touch.enabled
+      ? '选择剑路后返回江湖，真气满时点击「气」释放剑境。三路印记与剑意会保留。'
+      : '选择剑路后返回江湖，真气满时按 E 释放剑境；战斗中也可按 1 / 2 / 3 快捷换路。三路印记与剑意会保留。';
     $('.caudiopanel .cmwrap').scrollTop = 0;
     const audio = game.audio;
     $('[data-volume]').value = String(Math.round((audio?.volume ?? .8) * 100));

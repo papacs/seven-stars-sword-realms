@@ -360,7 +360,6 @@ export class Game {
     // (touch controls have no cursor to capture: their first 斩 is a real strike)
     if (this.state === 'playing' && b.light.pressed && !input.locked && !input.touch.enabled && !this.autopilot && !this.params.has('harness')) {
       input.requestLock();
-      if (!this._lockedOnce) { this._lockedOnce = true; return true; } // the first click only captures the mouse
     }
     return false;
   }

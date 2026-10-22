@@ -85,3 +85,22 @@
 @media(max-height:520px){.wx-touch .csword{top:125px;width:230px}.wx-touch .csword .cscaption,.wx-touch .csword .csresonance,.wx-touch .csword p{display:none}.wx-touch .cencounter{top:80px;right:65px;width:205px}.wx-touch .cencounter p,.wx-touch .cencounter>span{display:none}.wx-touch .cq p{max-width:220px}.wx-touch .cactions{right:65px;gap:5px;max-width:245px}.wx-touch .cguide{bottom:15px}.wx-touch .cresult{top:90px;width:240px}.wx-touch .cq{max-width:235px}}
 @media(prefers-reduced-motion:reduce){#condor *,#condor *:before,.wx .sword-title *{animation:none!important;transition:none!important}.csnotice{transition:none}}
 @media(max-height:520px){.wx-touch .cq{top:44px}.wx-touch .cq small{display:none}}
+
+/* Discoveries live in the book; only a nearby object asks for attention in the world. */
+.cbooknav{position:sticky;top:0;z-index:2;display:flex;gap:8px;padding:10px 0 13px;background:#061116;border-bottom:1px solid #b9aa7344;margin-bottom:18px}
+.cbooknav button{background:#15292b;border:1px solid #bba46d55;padding:9px 17px;font-size:12px}.cbooknav button:last-child{margin-left:auto;background:transparent}
+.cbooknav button:hover{border-color:#d3bc85;background:#29403b}.cmysterybook,.cmanual .cmgrid{scroll-margin-top:70px}
+.cmysterybook{margin:28px 0;border-top:1px solid #c4b17b55;padding-top:24px}
+.cmysterybook header>small{font-size:10px;color:#c7af7d;letter-spacing:3px}
+.cmysterybook h2{font-size:26px;letter-spacing:5px;font-weight:400;margin:8px 0 12px}
+.cmysterybook h2 span{font:12px Georgia,serif;letter-spacing:2px;margin-left:12px;color:#9fb2aa}
+.cmysterybook header p,.cmysteryentries p{font-size:12px;line-height:1.9;color:#b8c6bf;margin:0}
+.cmysteryentries{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:18px}
+.cmysteryentries article{padding:18px;background:linear-gradient(140deg,#19302c88,#091b22);border:1px solid #a7beaa22}
+.cmysteryentries small{color:#839b92;font:10px Georgia,serif;letter-spacing:2px}
+.cmysteryentries h3{font-size:17px;font-weight:400;letter-spacing:2px;margin:10px 0;color:#bfc8bb}
+.cmysteryentries .found{border-color:#c5b77d66}.cmysteryentries .found h3,.cmysteryentries .found small{color:#e1c993}
+.cmysterynotice{position:absolute;top:22%;left:50%;transform:translateX(-50%);max-width:80vw;padding:10px 20px;border-top:1px solid #dec58b66;border-bottom:1px solid #dec58b33;background:linear-gradient(90deg,transparent,#0b2428dd 20%,#0b2428dd 80%,transparent);text-align:center;color:#e3d8b8;font-size:12px;line-height:1.8;letter-spacing:2px;text-shadow:0 2px 5px #000}
+.cdchoices button{max-width:100%}
+@media(max-width:700px){.cmysteryentries{grid-template-columns:1fr}.cmysteryentries article{padding:13px 16px}.cmysterynotice{font-size:10px;letter-spacing:1px}.cmysterybook h2{font-size:23px}.cbooknav button{padding:9px 11px;font-size:11px}}
+@media(max-height:520px){.cmysteryentries{grid-template-columns:1fr}.cmysteryentries article{padding:12px 16px}.cmysterynotice{top:29%}}

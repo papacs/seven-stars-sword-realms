@@ -22,6 +22,16 @@ test('the recovered combat framing keeps the feet inside the picture', () => {
   const feet = new THREE.Vector3(0, .05, 0).project(camera);
   assert.ok(feet.y >= -1 && feet.y <= 1, `feet cropped at ${feet.y}`);
 });
+
+test('strafing does not turn the camera and change the movement direction', () => {
+  const camera = new THREE.PerspectiveCamera(48, 16/9, .1, 100);
+  const c = new CombatCamera({ camera, world: { heightAt: () => 0, colliders: [] } });
+  c.resetBehind(0);
+  const ctx = { player: { pos: new THREE.Vector3(), vel: new THREE.Vector3(-4, 0, 0), hop: 0 },
+    enemies: [], lock: null, input: { move: new THREE.Vector2(1, 0), look: new THREE.Vector2(), lookIdle: 5 } };
+  for (let i = 0; i < 120; i++) c.update(1/60, ctx);
+  assert.ok(Math.abs(c.heading) < .001, `strafe made camera orbit: ${c.heading}`);
+});
 test('sword intent is capped, three points empower and seven points form union', () => {
   const s = new SwordIntent(); s.gain(2); assert.equal(s.cast().empowered, false); assert.equal(s.stars, 2);
   s.gain(1); assert.equal(s.cast().empowered, true); assert.equal(s.stars, 0);

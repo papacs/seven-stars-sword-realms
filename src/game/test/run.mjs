@@ -15,6 +15,7 @@ import { Enemy } from '../enemy.js';
 import { Coordinator, think } from '../ai.js';
 import { Combat, FEEL } from '../combat.js';
 import { Input } from '../input.js';
+import { Game } from '../game.js';
 import { bus } from '../../core/bus.js';
 
 // ------------------------------------------------------------------------------------------------ tiny harness
@@ -217,6 +218,16 @@ test('a perfect dodge awards intent consistently for arrows and melee, once per 
 });
 
 // ------------------------------------------------------------------------------------------------ player FSM
+test('the first desktop strike acquires the mouse without swallowing the attack', () => {
+  const g = Object.create(Game.prototype), inp = makeInput();
+  Object.assign(g, { state: 'playing', paused: false, params: new URLSearchParams() });
+  let requests = 0;
+  Object.assign(inp, { locked: false, touch: { enabled: false }, requestLock() { requests++; } });
+  inp.press('light');
+  assert(g._meta(inp) === false, 'pointer acquisition must not consume the first strike');
+  assert(requests === 1, 'desktop camera should still acquire pointer lock');
+});
+
 test('light press starts attack1; a buffered press inside the combo window chains attack2', () => {
   const g = makeGame(), inp = makeInput(), P = g.player;
   inp.press('light'); step(g, inp); inp.release('light'); step(g, inp);
@@ -226,6 +237,28 @@ test('light press starts attack1; a buffered press inside the combo window chain
   inp.press('light'); step(g, inp); inp.release('light');
   runUntil(g, inp, () => P.clip !== 'attack1', 60);
   assert(P.clip === 'attack2', `clip=${P.clip}`);
+});
+
+test('light attacks on the press frame; release never queues a second swing', () => {
+  const g = makeGame(), inp = makeInput(), P = g.player;
+  inp.press('light'); step(g, inp);
+  assert(P.state === 'attack' && P.clip === 'attack1', 'the first frame must respond without waiting for release');
+  inp.release('light'); step(g, inp);
+  runUntil(g, inp, () => P.state === 'loco');
+  assert(P.swingId === 1, `unexpected extra swing ${P.swingId}`);
+});
+
+test('a buffered dodge takes priority over a combo and cancels pending charge', () => {
+  const g = makeGame(), inp = makeInput(), P = g.player;
+  P.startAttack('attack1'); P.clipT = gameMeta('attack1').cancel;
+  inp.press('light'); inp.press('dodge'); step(g, inp);
+  assert(P.state === 'dodge', `queued attack overrode dodge: ${P.state}`);
+  step(g, inp, 18);
+  assert(!P.want('heavy'), 'holding the cancelled attack must not arm a phantom heavy');
+  inp.release('light'); inp.release('dodge');
+  runUntil(g, inp, () => P.state === 'loco');
+  step(g, inp, 10);
+  assert(P.state === 'loco', 'dodge must not replay the cancelled light input');
 });
 test('combo runs attack1 → 2 → 3 → 4 and returns to locomotion', () => {
   const g = makeGame(), inp = makeInput(), P = g.player;

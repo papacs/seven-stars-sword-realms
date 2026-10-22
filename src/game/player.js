@@ -78,9 +78,10 @@ export class Player extends Actor {
     const b = input.b;
     const ctl = this.controlEnabled && this.state !== 'dead' && this.state !== 'victory';
     if (ctl) {
-      if (b.light.pressed) { this.lightArmed = true; }
+      // A press cuts immediately; a sustained hold queues a heavy at the next combo window.
+      if (b.light.pressed) { this.lightArmed = true; this.buf.light = this.clock; }
       if (this.lightArmed) {
-        if (!b.light.down) { this.lightArmed = false; this.buf.light = this.clock; }
+        if (!b.light.down) { this.lightArmed = false; }
         else if (b.light.held >= PLAYER.holdHeavy) { this.lightArmed = false; this.buf.heavy = this.clock; this.heavyHold = true; }
       }
       if (b.heavy.pressed) { this.buf.heavy = this.clock; this.heavyHold = b.heavy.down; }
@@ -341,6 +342,10 @@ export class Player extends Actor {
     if (!m) return this._toLoco();
     const hw = m.hit?.[0] ?? [m.duration * 0.3, m.duration * 0.45];
     const tgt = this.attackTarget;
+    // Once recovery opens, defensive input wins over a queued follow-up attack.
+    if (this.clipT >= (m.cancel ?? m.duration) && this.want('dodge', 0.3)) {
+      this.consume('dodge'); return this.startDodge();
+    }
     // track the target during the startup (committed once the blade is live)
     if (tgt?.alive && this.clipT < hw[0]) this.faceTowards(tgt.pos.x, tgt.pos.z, 9, dt);
     // heavy leap
@@ -455,6 +460,7 @@ export class Player extends Actor {
 
   // dodge -----------------------------------------------------------------------------------------------------
   startDodge() {
+    this.consume('light'); this.consume('heavy'); this.lightArmed = false;
     this.perfectEvade = false;
     let dir = _v.copy(this.moveDir);
     const hasDir = this.moveMag > 0.25;

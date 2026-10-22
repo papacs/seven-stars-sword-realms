@@ -3,18 +3,21 @@ import { bus } from '../core/bus.js';
 import { lamps } from '../core/lamps.js';
 import { LAYERS } from '../core/globals.js';
 import { SwordIntent, SWORD_PATHS } from './sword-intent.js';
+import { createActionFeedback } from './action-feedback.js';
 
 // Timing builds intent; changing empowered paths completes a three-seal constellation.
 export function createSwordArts(app, game, root) {
+  createActionFeedback(app, game, root);
   const intent = new SwordIntent(), P = game.player;
   const hud = document.createElement('section'); hud.className = 'csword'; hud.setAttribute('aria-label', '七星剑意');
   hud.innerHTML = `<div class="cscaption"><span>七星剑境</span><small>SEVEN STARS</small></div>
-    <div class="cspaths">${SWORD_PATHS.map(p => `<button data-path="${p.id}" aria-pressed="false" title="${p.description}"><kbd>${p.key}</kbd><span>${p.name}</span><i aria-label="共鸣印记"></i></button>`).join('')}</div>
+    <div class="cspaths">${SWORD_PATHS.map(p => `<button data-path="${p.id}" aria-pressed="false" aria-describedby="cs-path-${p.id}"><kbd aria-hidden="true">${p.key}</kbd><span><b>${p.name}</b><strong>${p.art}</strong><small id="cs-path-${p.id}">${p.description}</small></span><i aria-label="共鸣印记"></i></button>`).join('')}</div>
     <div class="csstars" role="meter" aria-label="剑意" aria-valuemin="0" aria-valuemax="7">${Array.from({ length: 7 }, (_, i) => `<i data-star="${i}"></i>`).join('')}</div>
     <div class="csread"><b></b><span></span></div><p></p>
-    <button class="cscast" disabled><kbd>E</kbd><span></span><small></small><i></i></button>
     <div class="csresonance"></div>`;
-  hud.hidden = true; root.append(hud);
+  // Story and practice maps initialize settings in different orders. The panel
+  // belongs only to settings; keep it detached until that container exists.
+  root.querySelector('.cssettings')?.append(hud);
   const notice = document.createElement('div'); notice.className = 'csnotice'; notice.setAttribute('role', 'status'); root.append(notice);
   let noticeAge = 10, activeCast = null;
   function announce(text) { notice.textContent = text; noticeAge = 0; }
@@ -28,20 +31,12 @@ export function createSwordArts(app, game, root) {
     const completes = intent.seals.size === 2 && !intent.seals.has(intent.path);
     hud.querySelector('.csread b').textContent = intent.stars === 7 ? '七星齐明 · 北斗合一' : intent.stars >= 3 ? (completes ? '第三印 · 共鸣合一' : '三颗星 · 强化已就') : '识破 +2 · 踏隙 / 制敌 +1';
     hud.querySelector('.csread span').textContent = `${intent.stars} / 7`;
-    hud.querySelector('p').textContent = path.description;
+    hud.querySelector('p').textContent = `当前剑境 · ${path.art} · 真气 ${Math.floor(P.focus)}%`;
     hud.querySelector('.csresonance').textContent = intent.seals.size ? `三路共鸣 ${intent.seals.size}/3 · 换用未亮的剑路，强化成印` : '三路各施一次强化剑境 · 第三路北斗合一';
-    const full = P.focus >= 100, cast = hud.querySelector('.cscast');
-    cast.disabled = !full || !P.alive || P.state === 'special';
-    cast.querySelector('span').textContent = path.art;
-    cast.querySelector('small').textContent = full ? '真气已满 · 释放' : `真气 ${Math.floor(P.focus)}%`;
-    cast.style.setProperty('--qi', `${P.focus}%`);
-    hud.classList.toggle('ready', full);
+    hud.classList.toggle('ready', P.focus >= 100);
     hud.classList.toggle('union', intent.stars === 7 || (completes && intent.stars >= 3));
     hud.dataset.path = intent.path; hud.dataset.stars = String(intent.stars);
   }
-  hud.querySelector('.cscast').onclick = () => {
-    if (game.state === 'playing' && !game.chapter?.modal && !game.paused) game.input.virtual.press('special');
-  };
   function select(id) {
     const inSettings = !!hud.closest('.caudiopanel:not([hidden])');
     if (!P.alive || (!inSettings && (game.state !== 'playing' || game.chapter?.modal))) return;
@@ -103,7 +98,7 @@ export function createSwordArts(app, game, root) {
   }
   let freezeCountdown = 0;
   const arts = {
-    intent, earn,
+    intent, earn, panel: hud,
     prepare() {
       activeCast = intent.cast();
       if (!app.params.has('record')) game.camera.setMode('follow', { heading: P.yaw, force: true, blend: 5 });
@@ -146,7 +141,6 @@ export function createSwordArts(app, game, root) {
     if (freezeCountdown > 0 && --freezeCountdown === 0) app.freeze(true);
     refresh += rawDt;
     if (refresh >= .1) { render(); refresh = 0; }
-    hud.hidden = !hud.closest('.caudiopanel:not([hidden])') && (game.state !== 'playing' || !!game.chapter?.modal);
     noticeAge += rawDt; notice.style.opacity = noticeAge < 2 ? String(Math.min(1, (2 - noticeAge) * 3)) : '0';
     if (game.chapter?.modal || game.state !== 'playing') notice.style.opacity = '0';
     if (!game.paused && !game.chapter?.modal) sigilAge += dt;

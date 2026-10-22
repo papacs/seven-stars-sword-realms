@@ -63,7 +63,7 @@ export function createTouchControls(app, { game, hud } = {}) {
   layer.innerHTML = `
     <div class="zone zl"></div><div class="zone zr"></div>
     <div class="stick"><div class="wash"></div><div class="ring"></div><div class="g">行</div><div class="fast">疾</div><div class="knob"><i></i></div></div>
-    ${BUTTONS.map((B) => `<div class="tb ${B.k}" data-a="${B.a}" style="--rot:${B.rot}deg"><i class="bg"></i>${B.a === 'special' ? '<i class="rt m"></i>' : ''}<i class="gl"></i><i class="r m"></i><i class="bl m"></i><b>${B.g}</b></div>`).join('')}
+    ${BUTTONS.map((B) => `<div class="tb ${B.k}" data-a="${B.a}" style="--rot:${B.rot}deg"><i class="bg"></i>${B.a === 'special' ? '<i class="rt m"></i>' : ''}<i class="gl"></i><i class="r m"></i><i class="bl m"></i><b>${B.g}</b>${['light','dodge'].includes(B.a) ? '<i class="c-recovery"></i>' : ''}${['light','block','dodge','special'].includes(B.a) ? `<span class="c-btn-label">${{light:'长按蓄力',block:'招架',dodge:'闪避',special:'剑境'}[B.a]}</span>` : ''}</div>`).join('')}
     <div class="tp"><i class="bg"></i><i class="r m"></i><i class="s m"></i><i class="s m"></i></div>
     <div class="probe"></div>`;
   root.insertBefore(layer, root.querySelector('.scr'));   // under the screens (title, pause, endings)
@@ -79,6 +79,7 @@ export function createTouchControls(app, { game, hud } = {}) {
   const buttons = BUTTONS.map((B) => ({ ...B, el: layer.querySelector(`.tb[data-a="${B.a}"]`), id: null, flip: false }));
   const btn = Object.fromEntries(buttons.map((B) => [B.a, B]));
   const glyphMain = btn.light.el.querySelector('b');
+  const lightLabel = btn.light.el.querySelector('.c-btn-label'), dodgeLabel = btn.dodge.el.querySelector('.c-btn-label');
 
   // screens: tap words, and the touch list in the pause menu / in-game hint
   const rows = (list) => list.map(([k, zh, en]) => `<kbd>${k}</kbd><span>${zh}<i>${en}</i></span>`).join('');
@@ -283,8 +284,19 @@ export function createTouchControls(app, { game, hud } = {}) {
     const P = game.player;
     if (!P) return;
     const charge = P.state === 'charge';
-    if (charge !== flags.charge) glyphMain.textContent = charge ? '劈' : '斩';
+    if (charge !== flags.charge) {
+      glyphMain.textContent = charge ? '劈' : '斩';
+      lightLabel.textContent = charge ? '松手出剑' : '长按蓄力';
+    }
     flag('charge', charge, btn.light.el, 'charge');
+    btn.light.el.classList.toggle('recovering', charge);
+    if (charge) btn.light.el.style.setProperty('--recovery', Math.min(1, P.chargeT / .75));
+    const recovering = P.state === 'dodge' && P.clipT < (P.clipMeta?.cancel ?? .4);
+    if (recovering !== flags.recovering) {
+      flags.recovering = recovering; btn.dodge.el.classList.toggle('recovering', recovering);
+      dodgeLabel.textContent = recovering ? '收势中' : '闪避';
+    }
+    if (recovering) btn.dodge.el.style.setProperty('--recovery', Math.min(1, P.clipT / (P.clipMeta?.cancel ?? .4)));
     flag('guard', P.state === 'block' || P.state === 'parry', btn.block.el, 'act');
     flag('sheathed', !P.drawn, btn.draw.el, 'off');
     flag('lock', !!P.lock?.alive, btn.lock.el, 'lit');
@@ -392,6 +404,10 @@ html.wx-touch, html.wx-touch body { -webkit-user-select: none; user-select: none
 .wxt .tb[data-a=special] b { opacity: .5; }
 
 /* states (after the kinds, so they win) */
+.wxt .tb .c-recovery{inset:1%;border-radius:50%;background:conic-gradient(from -90deg,#c7e8dc calc(var(--recovery,1)*100%),#c7e8dc10 0);mask:radial-gradient(transparent 65%,#000 68%,#000 70%,transparent 73%);opacity:0;transition:opacity .15s}
+.wxt .tb.recovering .c-recovery{opacity:.8}
+.wxt .tb .c-btn-label{left:-20%;right:-20%;top:100%;text-align:center;font:9px/1.4 'Noto Serif SC',serif;letter-spacing:2px;color:#e1e1cc;text-shadow:0 1px 4px #000}
+.wxt .tb.recovering .c-btn-label{color:#b5cfca}
 .wxt .tb.on { transform: scale(.9); }
 .wxt .tb.on .r { opacity: .95; }
 .wxt .tb.on b { color: #fff6e2; }

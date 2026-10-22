@@ -6,6 +6,7 @@ import assert from 'node:assert/strict';
 
 const base = process.env.GAME_URL ?? 'http://127.0.0.1:4173/';
 const regressionsOnly = process.argv.includes('--regressions');
+const polishOnly = process.argv.includes('--polish');
 const browser = await chromium.launch({
   executablePath: process.env.CHROME_PATH ?? [
     'C:/Program Files/Google/Chrome/Application/chrome.exe',
@@ -24,7 +25,7 @@ const button = name => page.getByRole('button', { name, exact: true });
 const state = () => page.evaluate(() => {
   const g = window.__full.game;
   return { stage: g.chapter.quest?.stage, route: g.chapter.quest?.route, state: g.state,
-    player: g.player.state, hp: g.player.hp, focus: g.player.focus, stars: g.swordArts.intent.stars,
+    player: g.player.state, hp: g.player.hp, focus: g.player.focus, stars: g.swordArts.intent.stars, path: g.swordArts.intent.path,
     seals: [...g.swordArts.intent.seals], cast: g.swordArts.lastCast,
     paused: g.paused, modal: g.chapter.modal, enemies: g.enemies.filter(e => e.active && e.alive).length,
     pending: g.director.pending.length, camera: g.camera.mode };
@@ -54,7 +55,99 @@ async function clearTo(stage) {
   await button('清除当前敌人').click();
   await page.waitForFunction(s => window.__full.game.chapter.quest.stage === s, stage);
 }
+async function selectSword(path) {
+  const before = await state();
+  assert.equal(await page.locator('#condor>.csword').count(), 0, 'the battlefield must not contain a sword selection panel');
+  await button('设置').click();
+  await page.getByRole('dialog', { name: '江湖设置' }).waitFor();
+  assert.equal(await button('剑境选择').getAttribute('aria-pressed'), 'true', 'settings opens on sword selection on every device');
+  assert.equal(await page.locator('.cssettings .csword').isVisible(), true);
+  const touch = await page.evaluate(() => window.__full.game.input.touch.enabled);
+  assert.match(await page.locator('.cssettingstip').innerText(), touch ? /点击「气」/ : /按 E/);
+  await page.locator(`.cssettings button[data-path="${path}"]`).click();
+  assert.equal(await page.locator(`.cssettings button[data-path="${path}"]`).getAttribute('aria-pressed'), 'true');
+  await page.screenshot({ path: `../previews/七星剑境-${touch ? '触控' : '桌面'}设置.png` });
+  await button('返回江湖').click();
+  await page.waitForFunction(() => !window.__full.game.chapter.modal);
+  assert.equal(await page.locator('.csword').isVisible(), false);
+  const after = await state();
+  assert.equal(after.path, path); assert.equal(after.stars, before.stars); assert.deepEqual(after.seals, before.seals);
+}
+async function castSword() {
+  await page.locator('#c').focus();
+  await page.keyboard.press('e');
+}
 try {
+  if (polishOnly) {
+    await load('&verify=1'); await begin();
+    await selectSword('guard');
+    await page.locator('#c').focus();
+    for (const [key, path] of [['2', 'pierce'], ['3', 'flow'], ['1', 'guard'], ['2', 'pierce']]) {
+      await page.keyboard.press(key);
+      await page.waitForFunction(p => window.__full.game.swordArts.intent.path === p, path);
+    }
+    await page.waitForFunction(() => document.querySelector('.cswordstatus>span').textContent === '惊雷贯日');
+    checks.push('desktop settings default to sword selection; selection preserves intent, closes cleanly and keyboard shortcuts update compact status');
+    await page.locator('#c').focus();
+    // The story starts with the sword sheathed; test cuts after the authored draw animation.
+    await page.keyboard.press('f');
+    await page.waitForFunction(() => window.__full.game.player.drawn && window.__full.game.player.state === 'loco');
+    await page.keyboard.down('j');
+    await page.waitForFunction(() => window.__full.game.player.clip === 'attack1');
+    await page.locator('.ckeys [data-action="light"].active').waitFor();
+    await page.keyboard.up('j');
+    await page.waitForFunction(() => window.__full.game.player.state === 'loco');
+    await page.keyboard.down('j');
+    await page.waitForFunction(() => window.__full.game.player.state === 'charge');
+    await page.waitForFunction(() => window.__full.game.player.chargeT > .8);
+    assert.match(await page.locator('.cstance').innerText(), /蓄势已满/);
+    await page.screenshot({ path: '../previews/七星剑境-蓄势反馈.png' });
+    await page.keyboard.up('j');
+    await page.waitForFunction(() => window.__full.game.player.clip === 'heavy');
+    await page.waitForFunction(() => window.__full.game.player.state === 'loco');
+    await page.keyboard.press('Space');
+    await page.locator('.ckeys [data-action="dodge"].active').waitFor();
+    await page.screenshot({ path: '../previews/七星剑境-身法反馈.png' });
+    await page.waitForFunction(() => window.__full.game.player.state === 'loco');
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => window.__full.game.paused);
+    assert.equal(await page.locator('.ccombat').isVisible(), false);
+    assert.equal(await page.locator('#condor>.csword').count(), 0);
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !window.__full.game.paused);
+    checks.push('press feedback, held-light charge, heavy release, dodge progress and pause visibility');
+    await button('补气').click(); await talkRoute('aid');
+    await page.locator('#c').focus(); await page.keyboard.press('q');
+    await page.waitForFunction(() => window.__full.game.enemies.some(e => e.active && e.alive && e.distTo(window.__full.game.player) < 3));
+    for (let i = 0; i < 15; i++) {
+      await page.keyboard.press('j');
+      await page.waitForTimeout(200);
+      if (await page.locator('.chit:not([hidden])').count()) break;
+    }
+    await page.locator('.chit:not([hidden])').first().waitFor();
+    await page.screenshot({ path: '../previews/七星剑境-命中反馈.png' });
+    checks.push('real melee contact produces a projected hit confirmation');
+    await page.setViewportSize({ width: 844, height: 390 });
+    await load('&touch=1'); await begin();
+    await selectSword('flow');
+    const light = page.locator('.tb[data-a="light"]'), dodge = page.locator('.tb[data-a="dodge"]');
+    const box = await light.boundingBox();
+    await page.mouse.move(box.x + box.width/2, box.y + box.height/2); await page.mouse.down();
+    await page.locator('.tb[data-a="light"].charge').waitFor();
+    assert.equal(await light.locator('.c-btn-label').innerText(), '松手出剑');
+    await page.screenshot({ path: '../previews/七星剑境-触控蓄力.png' });
+    await page.mouse.up();
+    await page.waitForFunction(() => window.__full.game.player.state === 'loco');
+    await dodge.click();
+    await page.locator('.tb[data-a="dodge"].recovering').waitFor();
+    assert.equal(await dodge.locator('.c-btn-label').innerText(), '收势中');
+    await page.screenshot({ path: '../previews/七星剑境-触控身法.png' });
+    await page.waitForFunction(() => window.__full.game.player.state === 'loco');
+    assert.equal(await dodge.locator('.c-btn-label').innerText(), '闪避');
+    assert.equal(await page.locator('.ckeys').isVisible(), false);
+    assert.equal(await page.locator('#condor>.csword').count(), 0);
+    checks.push('touch hold/release, charging arc, dodge recovery arc and uncluttered layout');
+  } else {
   if (!regressionsOnly) {
   await load('');
   assert.equal(await page.locator('.cverify').count(), 0);
@@ -79,10 +172,10 @@ try {
   checks.push('manual opens and closes; pause and resume restore play');
   await button('损失气血').click();
   for (const [path, art, seals] of [['guard','回风剑围',1],['pierce','惊雷贯日',2],['flow','流云三叠',0]]) {
-    await page.locator(`[data-path="${path}"]`).click();
+    await selectSword(path);
     await button('补至三星').click();
     if (path === 'flow') await button('定格下一招 / 继续').click();
-    await page.locator('.cscast:not([disabled])').click();
+    await castSword();
     await page.waitForFunction(name => window.__full.game.swordArts.lastCast?.name === name, art);
     if (path === 'flow') {
       await page.waitForFunction(() => window.__app.time.frozen);
@@ -102,8 +195,8 @@ try {
     await button('补气').click(); await talkRoute(route);
     assert.equal((await state()).enemies, route === 'aid' ? 2 : 3);
     if (route === 'aid') {
-      await page.locator('[data-path="guard"]').click();
-      await button('补至三星').click(); await page.locator('.cscast:not([disabled])').click();
+      await selectSword('guard');
+      await button('补至三星').click(); await castSword();
       await page.waitForFunction(() => window.__full.game.swordArts.lastCast?.name === '回风剑围');
       await page.waitForFunction(() => window.__full.game.player.state === 'loco');
       assert.equal((await state()).seals.length, 1);
@@ -144,13 +237,16 @@ try {
   await page.screenshot({ path: '../previews/七星剑境-横屏触控.png' });
   assert.ok(await page.locator('.wx.touch').count());
   assert.equal(await page.locator('.csword').isVisible(), false, 'touch play must leave the scene clear');
+  assert.equal(await page.locator('#condor>.csword').count(), 0);
   await button('设置').click();
   await page.getByRole('dialog', { name: '江湖设置' }).waitFor();
   assert.equal(await page.locator('.cssettings .csword').isVisible(), true);
+  assert.equal(await button('剑境选择').getAttribute('aria-pressed'), 'true');
   for (const path of ['guard', 'flow', 'pierce']) {
-    await page.locator(`[data-path="${path}"]`).click();
-    assert.equal(await page.locator(`[data-path="${path}"]`).getAttribute('aria-pressed'), 'true');
+    await page.locator(`button[data-path="${path}"]`).click();
+    assert.equal(await page.locator(`button[data-path="${path}"]`).getAttribute('aria-pressed'), 'true');
   }
+  await page.screenshot({ path: '../previews/七星剑境-触控设置.png' });
   await button('声音设置').click();
   assert.equal(await page.getByRole('slider', { name: '总音量', exact: true }).isVisible(), true);
   await button('剑境选择').click();
@@ -159,8 +255,9 @@ try {
   assert.equal(await page.locator('.csword').isVisible(), false);
   checks.push('touch play hides sword panel; settings switch all paths and audio tabs, then restore play');
   }
+  }
   assert.deepEqual(errors, []);
-  writeFileSync(`../previews/experience-${regressionsOnly ? 'regressions' : 'verification'}.json`, JSON.stringify({ checks, errors }, null, 2));
+  writeFileSync(`../previews/experience-${polishOnly ? 'polish' : regressionsOnly ? 'regressions' : 'verification'}.json`, JSON.stringify({ checks, errors }, null, 2));
   console.log(JSON.stringify({ checks, errors }, null, 2));
 } catch (error) {
   await page.screenshot({ path: '../previews/experience-failure.png' }).catch(() => {});

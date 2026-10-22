@@ -337,7 +337,7 @@ export function lockon(E, t, _o, p) {
   E.out(o, { bus: 'ui', gain: (p?.gain ?? 1) * 0.8, rev: 0.1 });
 }
 
-/** UI sounds: brush (on paper), seal (stamp), tick, hover, open/close (pause), focus (meter full). */
+/** UI sounds: brush, seal, tick, hover, open/close, focus, and the bronze mystery bell. */
 export function ui(E, t, { kind = 'tick' } = {}) {
   const o = E.ctx.createGain();
   if (kind === 'brush') {
@@ -348,6 +348,10 @@ export function ui(E, t, { kind = 'tick' } = {}) {
     const lfo = E.ctx.createOscillator(); lfo.type = 'sawtooth'; lfo.frequency.value = 37; const lg = E.ctx.createGain(); lg.gain.value = 0.4;
     lfo.connect(lg).connect(grain.gain); lfo.start(t); lfo.stop(t + 0.75);
     n.connect(grain).connect(g).connect(o);
+  } else if (kind === 'bell') {
+    ring(E, t, 523.25, { amp: .16, decayK: 2.3, detune: .35, dest: o,
+      modes: [[1, 1, 1.5], [2.01, .4, 1.05], [2.71, .24, .8], [4.07, .12, .55]] });
+    tone(E, t, 180, { f2: 95, glide: .04, peak: .12, decay: .055, dest: o });
   } else if (kind === 'seal') {
     tone(E, t, 110, { f2: 70, glide: 0.05, peak: 0.45, decay: 0.08, dest: o });
     const n = noiseBand(E, t, 0.1, { f: 900, q: 3 });

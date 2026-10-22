@@ -1,0 +1,72 @@
+/* Warm paper, rain-dark ink and a little jade: feedback stays below the fight. */
+.ccombat{position:absolute;left:50%;bottom:27px;transform:translateX(-50%);width:350px;text-align:center;pointer-events:none}
+.cstance{--tone:#bcbea8;position:relative;display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:5px;min-height:30px;text-shadow:0 2px 8px #000}
+.cstance[data-tone=gold]{--tone:#f0d39b}.cstance[data-tone=jade]{--tone:#b2ead9}.cstance[data-tone=red]{--tone:#efab99}
+.cstance>i{width:4px;height:4px;transform:rotate(45deg);background:var(--tone);box-shadow:0 0 9px var(--tone)}
+.cstance>span{font-size:11px;letter-spacing:2px;color:var(--tone)}
+.cstance>small{font-size:9px;color:#bcc9c2;letter-spacing:.6px}
+.caction-meter{position:absolute;bottom:-2px;left:calc(50% - 40px);width:80px;height:2px;background:#c4cdb82b;overflow:hidden}
+.caction-meter b{display:block;height:100%;background:var(--tone);transform:scaleX(var(--progress));transform-origin:left;transition:transform .06s linear}
+.cswordstatus{display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:13px;font-size:9px;color:#b5c5bf;text-shadow:0 2px 8px #000}
+.cswordstatus kbd{font:9px Georgia,serif;color:var(--sword)}.cswordstatus>span{letter-spacing:1px}.cswordstatus>small{font-size:8px;color:#a9bbb3;white-space:nowrap}
+.cswordstatus>i{width:38px;height:2px;background:#c4cdb82b}.cswordstatus>i b{display:block;height:100%;background:var(--sword);transform:scaleX(var(--qi));transform-origin:left;transition:transform .1s linear}
+.cswordstatus.ready{color:var(--sword)}.cswordstatus.ready>i{box-shadow:0 0 6px var(--sword)}
+.ckeys{display:flex;justify-content:center;gap:7px}
+.ckeys>div{position:relative;box-sizing:border-box;width:58px;height:62px;display:grid;grid-template-columns:1fr;justify-items:center;align-content:center;gap:3px;background:linear-gradient(150deg,#0b1c22bd,#0a191f64);border:1px solid #bac6b12e;box-shadow:0 5px 14px #0002;transition:background .12s,border-color .12s,transform .12s}
+.ckeys b{font:400 22px/1 'Ma Shan Zheng',serif;color:#d5d8c6}.ckeys span{font-size:8px;letter-spacing:2px;color:#a8bab3}
+.ckeys kbd{position:absolute;top:-7px;right:3px;padding:1px 4px;background:#102026;color:#bcbd9e;font:8px/1.4 Georgia,serif;letter-spacing:.4px;border:1px solid #9cac8b33}
+.ckeys .active{border-color:#e9cd92aa;background:linear-gradient(145deg,#b6a06b38,#132c30c4);transform:translateY(-3px);box-shadow:0 0 16px #d3b47616}
+.ckeys .active b,.ckeys .active kbd{color:#f8deb1}.ckeys .active span{color:#e2d5b6}
+.chits{position:absolute;inset:0;overflow:hidden;pointer-events:none}
+.chit{position:absolute;will-change:transform,opacity;text-align:center;color:#f4ecdb;text-shadow:0 1px 5px #132020,0 2px 10px #000;min-width:32px}
+.chit>b{font:italic 24px/1 Georgia,serif}.chit>small{display:block;font-size:9px;letter-spacing:3px;margin-top:5px;color:#ead1a0}
+.chit>i{position:absolute;left:-8px;right:-8px;top:-8px;bottom:-6px;border-left:1px solid #f1dcb866;border-right:1px solid #f1dcb866;transform:skew(-12deg)}
+.chit[data-heavy=true]>b{font-size:32px;color:#ffe0a0}.chit[data-kill=true]>i{border-color:#e7b474}
+
+/* Give the existing panels the same fine edges and quieter hierarchy. */
+.cssettings .csword{border-radius:3px;background:linear-gradient(135deg,#081a21eb,#0a1b20c7);border-top-color:#d4c7a469}
+.cssettings .cspaths{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+#condor .cssettings .cspaths button{justify-content:flex-start;align-items:flex-start;text-align:left;white-space:normal;padding:14px 10px 16px;gap:5px}
+.cssettings .cspaths button>span{display:grid;gap:8px;min-width:0}.cssettings .cspaths b{font-size:11px;font-weight:400;letter-spacing:1px}
+.cssettings .cspaths strong{font-size:16px;letter-spacing:2px;font-weight:400;color:#e1dbc5}.cssettings .cspaths small{font-size:10px;line-height:1.7;letter-spacing:.4px;color:#a1b7af}
+.cssettings .cspaths kbd{padding-top:2px;margin-right:1px}.cssettings .cspaths button[aria-pressed=true] strong{color:var(--sword)}
+.cscaption{padding-bottom:12px;border-bottom:1px solid #c1cbb51c}
+.cscaption>span:before{content:'✦';color:var(--sword);font-size:11px;margin-right:9px}
+.cspaths button{border-radius:2px;transition:transform .15s,background .2s,border-color .2s!important}
+.cspaths button:active{transform:translateY(1px)}
+.cspaths button[aria-pressed=true]{box-shadow:inset 0 -2px var(--sword),0 0 18px #b6e4e409}
+.csstars .lit{animation:cstar-light .45s ease-out}
+.cq{padding-top:9px;padding-bottom:10px;background:linear-gradient(90deg,#07181d78,transparent);border-image:linear-gradient(#dfc38899,#dfc38822) 1}
+.cq small{color:#dbc38e}.cq h2{text-shadow:0 2px 12px #0008}
+.cactions button{transition:background .15s,border-color .15s,transform .15s}
+.cactions button:active{transform:translateY(2px)}
+.cprompt{box-shadow:0 8px 25px #0004,inset 0 1px #e9d7a51c;animation:cprompt-in .25s ease-out}
+.cprompt kbd{display:inline-grid;place-items:center;min-width:20px;min-height:20px;border:1px solid #d7bd8170;background:#c9b57d16}
+.cdialog:not([hidden]) .cdwrap{animation:cdialog-in .35s ease-out}
+.cdchoices button{border-radius:2px;transition:transform .15s,background .2s,border-color .2s}
+.cdchoices button:hover{transform:translateX(4px)}.cdchoices button:active{transform:translateX(4px) scale(.98)}
+.wx .sword-title .go{overflow:hidden;border-radius:2px;box-shadow:inset 0 1px #eeddb718,0 10px 30px #0002;transition:background .2s,border-color .2s,transform .2s}
+.wx .sword-title .go:hover{transform:translateY(-2px)}.wx .sword-title .go:active{transform:translateY(1px)}
+.ctitle-realms a{position:relative}.ctitle-realms a:after{content:'';position:absolute;bottom:0;left:0;width:100%;height:1px;background:#efd7a4;transform:scaleX(0);transform-origin:left;transition:transform .2s}
+.ctitle-realms a:hover:after{transform:scaleX(1)}
+
+/* Encounters begin while controls are live: keep the calligraphy above the blade work. */
+.condor-story .wx .banner{top:19%;width:max-content;max-width:60vw}
+.condor-story .wx .banner .tt{font-size:clamp(34px,3.6vw,54px);letter-spacing:.16em}
+.condor-story .wx .banner .no{font-size:10px;letter-spacing:.6em}
+.condor-story .wx .banner .ru{width:clamp(130px,16vw,230px);height:6px;margin-top:7px}
+.condor-story .wx .banner .en{font-size:9px;letter-spacing:.3em;margin-top:9px}
+.condor-story .wx .banner .seal{width:19px;right:-28px}
+
+.wx-touch .ccombat{bottom:70px;width:min(310px,65vw)}.wx-touch .ckeys{display:none}
+.wx-touch .cstance{margin:0}.wx-touch .cstance>small{display:none}.wx-touch .cstance>span{font-size:10px;letter-spacing:1px}
+.wx-touch .cswordstatus{margin:5px 0 0;font-size:8px;gap:6px}.wx-touch .cswordstatus kbd,.wx-touch .cswordstatus>i{display:none}
+.wx-touch .chit>b{font-size:21px}.wx-touch .chit[data-heavy=true]>b{font-size:26px}
+@media(max-width:1240px){html:not(.wx-touch) .ccombat{bottom:85px;width:300px}html:not(.wx-touch) .ckeys{display:none}}
+@media(max-width:700px){html:not(.wx-touch) .ccombat{display:none}}
+@media(max-width:600px){.cssettings .cspaths{grid-template-columns:1fr;gap:8px}#condor .cssettings .cspaths button{padding:12px}.cssettings .cspaths button>span{grid-template-columns:85px 1fr;align-items:center;gap:5px 10px}.cssettings .cspaths small{grid-column:1/-1}.cssettings .cspaths strong{font-size:15px}}
+@media(max-height:520px){.wx-touch .ccombat{bottom:49px}.wx-touch .cstance>span{font-size:9px}.condor-story .wx .banner{top:24%}.condor-story .wx .banner .tt{font-size:28px}.condor-story .wx .banner .no,.condor-story .wx .banner .en{font-size:8px}}
+@keyframes cstar-light{from{filter:brightness(2.3);scale:1.5}to{filter:brightness(1);scale:1}}
+@keyframes cprompt-in{from{opacity:0;translate:0 5px}to{opacity:1;translate:0 0}}
+@keyframes cdialog-in{from{opacity:0;translate:0 10px}to{opacity:1;translate:0 0}}
+@media(prefers-reduced-motion:reduce){.ccombat *,.chit,.wxt .tb *,.wx .sword-title .go{transition:none!important;animation:none!important}}
