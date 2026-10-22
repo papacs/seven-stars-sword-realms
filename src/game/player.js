@@ -455,6 +455,7 @@ export class Player extends Actor {
 
   // dodge -----------------------------------------------------------------------------------------------------
   startDodge() {
+    this.perfectEvade = false;
     let dir = _v.copy(this.moveDir);
     const hasDir = this.moveMag > 0.25;
     let clip;

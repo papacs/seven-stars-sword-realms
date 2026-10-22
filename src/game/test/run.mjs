@@ -15,6 +15,7 @@ import { Enemy } from '../enemy.js';
 import { Coordinator, think } from '../ai.js';
 import { Combat, FEEL } from '../combat.js';
 import { Input } from '../input.js';
+import { bus } from '../../core/bus.js';
 
 // ------------------------------------------------------------------------------------------------ tiny harness
 let passed = 0, failed = 0;
@@ -195,6 +196,25 @@ function step(game, input, n = 1) {
   }
 }
 const runUntil = (game, input, pred, max = 240) => { for (let i = 0; i < max; i++) { if (pred()) return true; step(game, input); } return pred(); };
+
+test('a perfect dodge awards intent consistently for arrows and melee, once per dodge', () => {
+  const g = makeGame(), P = g.player, e = addEnemy(g, 'archer');
+  const awards = [], off = bus.on('player:evade', p => { if (p.perfect) awards.push(p); });
+  try {
+    P.startDodge(); P.clipT = .1; P.iframes = true;
+    const arrow = { pos: V(0, 1, 0), vel: V(0, 0, -10), owner: e };
+    g.combat._arrowHits(arrow, P);
+    assert(awards.length === 1, 'a precisely dodged arrow must award intent');
+    g.combat.enemyHits(e, P, V(0, 1, 0), 'torso', { damage: 10 });
+    assert(awards.length === 1, 'one dodge cannot farm multiple rewards');
+    P.startDodge(); P.clipT = .1; P.iframes = true;
+    g.combat.enemyHits(e, P, V(0, 1, 0), 'torso', { damage: 10 });
+    assert(awards.length === 2, 'the next dodge can earn its own reward');
+    P.state = 'execute'; P.clipT = .1; P.perfectEvade = false;
+    g.combat.enemyHits(e, P, V(0, 1, 0), 'torso', { damage: 10 });
+    assert(awards.length === 2, 'cinematic invulnerability is not a timed dodge');
+  } finally { off(); }
+});
 
 // ------------------------------------------------------------------------------------------------ player FSM
 test('light press starts attack1; a buffered press inside the combo window chains attack2', () => {
@@ -388,6 +408,17 @@ test('touch source: held buttons give key edges, the stick moves, a drag looks (
   T.hold('block', true); inp.update(DT);
   inp.clear(); inp.update(DT);
   assert(!inp.b.block.down && inp.b.block.released && inp.move.lengthSq() === 0, 'clear releases the guard and the stick');
+});
+
+test('authored qi width and damage are used by the real travelling-wave collision', () => {
+  const g = makeGame();
+  const direct = addEnemy(g, 'bandit', 0, 2);
+  const outside = addEnemy(g, 'bandit', 1.6, 2);
+  direct.hp = outside.hp = 100; direct.maxHp = outside.maxHp = 100;
+  g.combat.qi.push({ pos: V(0,1,0), prev: V(0,1,0), dir: V(0,0,1), speed: 32, life: 1, age: 0, hit: new Set(), owner: g.player, damage: 23, posture: 0, radius: .72 });
+  g.combat._updateQi(.1);
+  assert(near(direct.hp, 77), `custom damage left ${direct.hp}`);
+  assert(near(outside.hp, 100), `narrow wave reached side target: ${outside.hp}`);
 });
 
 // ------------------------------------------------------------------------------------------------ report

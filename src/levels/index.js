@@ -11,9 +11,10 @@
 import steppe from './steppe.js';
 import bamboo from './bamboo.js';
 import town from './town.js';
+import niujia from './niujia.js';
 
-export const LEVELS = { steppe, bamboo, town };
-export const LEVEL_ORDER = ['steppe', 'bamboo', 'town'];
+export const LEVELS = { niujia, steppe, bamboo, town };
+export const LEVEL_ORDER = ['niujia', 'steppe', 'bamboo', 'town'];
 
 export function levelIdFromEnv() {
   try {

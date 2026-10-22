@@ -357,7 +357,8 @@ export function createHUD(app, opts = {}) {
     }, 160);
   }
   function onPointerDown(ev) {
-    if (S.state === 'title') { emitOnce('ui:start', {}); bus.emit('ui:sfx', { kind: 'seal' }); return; }
+    if (ev.target?.closest?.('.ctitle-realms a')) return;
+    if (S.state === 'title') return;
     if ((S.state === 'victory' || S.state === 'defeat') && S.now - S.stateT > 5) { emitOnce('ui:restart', {}); bus.emit('ui:sfx', { kind: 'seal' }); return; }
     const act = ev.target?.closest?.('[data-act]')?.dataset.act;
     if (!act) return;
@@ -370,7 +371,12 @@ export function createHUD(app, opts = {}) {
     else if ((S.state === 'victory' || S.state === 'defeat') && ev.code === 'Enter') emitOnce('ui:restart', {});
     else if (S.state === 'paused' && ev.code === 'Escape' && el.pause.classList.contains('show-ctl')) el.pause.classList.remove('show-ctl');
   }
+  function onTitleClick(ev) {
+    if (S.state !== 'title' || ev.target?.closest?.('.ctitle-realms a')) return;
+    emitOnce('ui:start', {}); bus.emit('ui:sfx', { kind: 'seal' });
+  }
   addEventListener('pointerdown', onPointerDown, true);
+  addEventListener('click', onTitleClick, true);
   addEventListener('keydown', onKey);
   root.addEventListener('pointerover', (ev) => { if (ev.target?.closest?.('button')) bus.emit('ui:sfx', { kind: 'hover' }); });
 
@@ -613,6 +619,7 @@ export function createHUD(app, opts = {}) {
     dispose() {
       offs.forEach((f) => f());
       removeEventListener('pointerdown', onPointerDown, true);
+      removeEventListener('click', onTitleClick, true);
       removeEventListener('keydown', onKey);
       ro?.disconnect();
       app.remove(sys);

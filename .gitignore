@@ -3,6 +3,16 @@ dist/
 .vite/
 .DS_Store
 *.log
+.env
+.env.*
+!.env.example
+.wrangler/
+.dev.vars
+.dev.vars.*
+*.pem
+*.key
+*.p12
+*.pfx
 
 # local working material, not part of the game
 shots/

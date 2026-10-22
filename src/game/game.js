@@ -81,7 +81,7 @@ export class Game {
     // layout (world owner) is optional: fall back to the bible anchors
     try { this.layout = (await import('../world/layout.js')).LAYOUT ?? DEFAULT_LAYOUT; } catch { this.layout = DEFAULT_LAYOUT; }
     this.arenaR = this.layout.arenaRadius ?? DEFAULT_LAYOUT.arenaRadius;
-    this.input = new Input(app.renderer.domElement);
+    this.input = new Input(app.renderer.domElement, { pointerLock: !this.params.has('harness') });
     this.camera = new CombatCamera(app, { heightAt: this.heightAt, colliders: app.world.colliders });
     this.coordinator = new Coordinator({ maxAttackers: 2 });
     // record mode (for trailers): H hides the HUD, O a slow orbit around the hero, V a rising crane shot, T slow motion (×0.35); ?hud=0
@@ -89,6 +89,9 @@ export class Game {
     if (hud && this.params.get('hud') === '0') hud.style.opacity = '0';   // opacity: children set their own visibility
     addEventListener('keydown', (e) => {
       if (e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (e.code === 'KeyB' && !this.chapter?.modal && this.state !== 'title') this.resetCamera();
+      // Recording controls are deliberately opt-in; ordinary play never enters a crane/orbit by accident.
+      if (!this.params.has('record') || this.chapter?.modal) return;
       if (e.code === 'KeyH' && hud) hud.style.opacity = hud.style.opacity === '0' ? '' : '0';
       else if (e.code === 'KeyO') this.camera.toggleOrbit('orbit');
       else if (e.code === 'KeyV') this.camera.toggleOrbit('crane');
@@ -101,7 +104,11 @@ export class Game {
     const kinds = [];
     let seed = 11;
     for (const [kind, n] of Object.entries(POOL)) for (let i = 0; i < n; i++) { kinds.push(kind); jobs.push(this.makeCharacter({ kind, seed: seed++ })); }
-    const chars = await Promise.all(jobs);
+    let built = 0;
+    const chars = await Promise.all(jobs.map(job => job.then(ch => {
+      built++; app.progress?.(0.86 + built / jobs.length * 0.075, `剑 · 人物与动作 ${built} / ${jobs.length}`);
+      return ch;
+    })));
     this.player = new Player(this, chars[0]);
     app.scene.add(this.player.group);
     kinds.forEach((kind, i) => {
@@ -130,11 +137,11 @@ export class Game {
       bus.on('player:attack', () => { for (const e of this.enemies) onPlayerAttack(e, this.player, this.rng); }),
       bus.on('player:death', () => { this.log('player death'); this.director.onPlayerDeath(); }),
       // HUD screens (U): title click, pause-menu resume, restart from the end screens
-      bus.on('ui:start', () => { if (this.state === 'title' && !this.autopilot) { this.director.begin(0); this.input.requestLock(); } }),
+      bus.on('ui:start', () => { if (this.state === 'title' && !this.autopilot) { this.director.begin(0); if (!this.chapter?.modal) this.input.requestLock(); } }),
       bus.on('ui:resume', () => { if (this.paused) this.setPaused(false); }),
       bus.on('ui:restart', () => this.director.requestRestart()),
     ];
-    this.input.onUnlock = () => { if (this.state === 'playing' && !this.params.has('harness')) this.setPaused(true); };
+    this.input.onUnlock = () => { if (this.state === 'playing' && !this.chapter?.modal && !this.params.has('harness')) this.setPaused(true); };
 
     // start state (URL): ?state=title|playing, ?wave=N (1-based) jumps straight into a wave, ?demo autostarts
     const wave = parseInt(this.params.get('wave') ?? '', 10);
@@ -233,6 +240,14 @@ export class Game {
     if (on) this.input.exitLock(); else this.input.requestLock();
   }
 
+  resetCamera() {
+    this.player.lockOn(null);
+    this.camera.resetBehind(this.player.yaw);
+    this.app.time.userScale = 1;
+    this.app.pipeline?.fx?.letterbox?.(false); this.letterboxT = 0;
+    const hud = document.getElementById('hud'); if (hud) hud.style.opacity = '';
+  }
+
   // ------------------------------------------------------------------------------------------ frame
   _tick(dt, rawDt) {
     if (G.uFrame.value === this._lastFrame) return;
@@ -244,6 +259,14 @@ export class Game {
     }
     this.autopilot?.update(dt, rawDt);
     input.update(rawDt);
+    // A conversation owns input and freezes combat, while animation and the camera keep running.
+    if (this.chapter?.modal) {
+      input.clear();
+      this.player.controlEnabled = false;
+      this.player.vel.set(0, 0, 0);
+      this.player.pose(0, this.time);
+      return;
+    }
     const swallowed = this._meta(input);
     if (this.paused) return;
     this.frame++;
@@ -317,10 +340,10 @@ export class Game {
     const P = this.player;
     const c = this._camCtx ??= { player: P, enemies: this.enemies, lock: null, input: null, sprinting: false, idleCine: false };
     c.lock = P.lock?.alive ? P.lock : null;
-    c.input = this.paused ? null : this.input;
+    c.input = this.paused || this.chapter?.modal ? null : this.input;
     c.sprinting = P.sprinting;
     // sun-seeking drift when idle and alone, and in the quiet after a wave is cleared (once the kill shot ends)
-    c.idleCine = this.idleT > 0 || (this.director.state === 'clear' && this.camera.mode === 'follow' && !P.lock);
+    c.idleCine = !this.chapter && (this.idleT > 0 || (this.director.state === 'clear' && this.camera.mode === 'follow' && !P.lock));
     this.camera.update(rawDt, c);
     this.input.endFrame();
   }
@@ -329,7 +352,7 @@ export class Game {
   _meta(input) {
     const b = input.b;
     if (this.state === 'title') {
-      if (!this.autopilot && (b.start.pressed || b.light.pressed || b.dodge.pressed)) { this.director.begin(0); input.requestLock(); input.clear(); return true; }
+      if (!this.autopilot && (b.start.pressed || b.light.pressed || b.dodge.pressed)) { this.director.begin(0); if (!this.chapter?.modal) input.requestLock(); input.clear(); return true; }
       return true;
     }
     if (b.pause.pressed) { this.setPaused(!this.paused); return true; }

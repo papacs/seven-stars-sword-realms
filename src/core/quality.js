@@ -6,6 +6,7 @@
 // The adaptive-resolution loop in app.js moves the render scale between minScale and scale (never the output size),
 // so the picture stays sharp: TAA reconstructs the full resolution from the jittered, smaller scene.
 import { bus } from './bus.js';
+import { LEVEL } from '../levels/index.js';
 
 export const QUALITY = {
   low: { label: '流畅', scale: 0.62, minScale: 0.5, grass: [0.8, 0.6, 0.45], volSteps: 8, aoSamples: 4, bloomLevels: 5 },
@@ -20,7 +21,7 @@ export function getQuality() {
     const s = localStorage.getItem('wx.quality');
     if (s && QUALITY[s]) return s;
   } catch { /* storage blocked */ }
-  return 'med';
+  return LEVEL.id === 'niujia' ? 'low' : 'med';
 }
 
 export function applyQuality(app, name, { grass = null } = {}) {

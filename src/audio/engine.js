@@ -64,10 +64,20 @@ export function createEngine(ctx, { seed = 7, volume = 0.8 } = {}) {
   limiter.threshold.value = -3; limiter.knee.value = 0; limiter.ratio.value = 20; limiter.attack.value = 0.0015; limiter.release.value = 0.09;
   const master = ctx.createGain(); master.gain.value = volume;
   const dcBlock = ctx.createBiquadFilter(); dcBlock.type = 'highpass'; dcBlock.frequency.value = 22; dcBlock.Q.value = 0.6;
-  sum.connect(dcBlock).connect(glue).connect(makeup).connect(limiter).connect(master).connect(ctx.destination);
+  const meter = ctx.createAnalyser(); meter.fftSize = 256;
+  const samples = new Float32Array(meter.fftSize);
+  sum.connect(dcBlock).connect(glue).connect(makeup).connect(limiter).connect(master).connect(meter).connect(ctx.destination);
+  function level() {
+    meter.getFloatTimeDomainData(samples);
+    let square = 0, peak = 0;
+    for (const sample of samples) { square += sample * sample; peak = Math.max(peak, Math.abs(sample)); }
+    return { rms: Math.sqrt(square / samples.length), peak };
+  }
 
   // ---- buses (music gets a muffle filter for pause) ----
   const buses = {};
+  const mix = { music: 1, sfx: 1, amb: 1, ui: 1 };
+  let muffleK = 0;
   for (const name of ['music', 'sfx', 'amb', 'ui']) { buses[name] = ctx.createGain(); }
   const muffle = ctx.createBiquadFilter(); muffle.type = 'lowpass'; muffle.frequency.value = 20000; muffle.Q.value = 0.5;
   const duckG = ctx.createGain();
@@ -144,10 +154,20 @@ export function createEngine(ctx, { seed = 7, volume = 0.8 } = {}) {
   }
   function setVolume(v, t = ctx.currentTime) { master.gain.setTargetAtTime(Math.max(0, Math.min(1.5, v)), t, 0.08); }
   function setMuffle(k, t = ctx.currentTime) {
+    muffleK = k;
+    // A prior impact's scheduled gain restoration must not override a new pause or mixer setting.
+    buses.music.gain.cancelScheduledValues(t);
+    buses.amb.gain.cancelScheduledValues(t);
     muffle.frequency.setTargetAtTime(k > 0 ? 20000 * Math.pow(600 / 20000, k) : 20000, t, 0.25);
-    buses.music.gain.setTargetAtTime(0.9 * (1 - 0.45 * k), t, 0.25);
-    buses.amb.gain.setTargetAtTime(0.85 * (1 - 0.35 * k), t, 0.3);
+    buses.music.gain.setTargetAtTime(0.9 * mix.music * (1 - 0.45 * k), t, 0.25);
+    buses.amb.gain.setTargetAtTime(0.85 * mix.amb * (1 - 0.35 * k), t, 0.3);
     duckG.gain.setTargetAtTime(1 - 0.6 * k, t, 0.2);
+  }
+  function setMix(values, t = ctx.currentTime) {
+    for (const key of Object.keys(mix)) if (Number.isFinite(values[key])) mix[key] = Math.max(0, Math.min(1, values[key]));
+    buses.sfx.gain.setTargetAtTime(mix.sfx, t, 0.08);
+    buses.ui.gain.setTargetAtTime(0.7 * mix.ui, t, 0.08);
+    setMuffle(muffleK, t);
   }
   let slowK = 0;
   function setSlowmo(k, t = ctx.currentTime) {
@@ -160,8 +180,9 @@ export function createEngine(ctx, { seed = 7, volume = 0.8 } = {}) {
   function duck(db, t = ctx.currentTime, release = 0.6) {
     const g = Math.pow(10, -Math.abs(db) / 20);
     buses.music.gain.cancelScheduledValues(t);
-    buses.music.gain.setTargetAtTime(0.9 * g, t, 0.01);
-    buses.music.gain.setTargetAtTime(0.9, t + 0.05, release / 3);
+    const base = 0.9 * mix.music * (1 - 0.45 * muffleK);
+    buses.music.gain.setTargetAtTime(base * g, t, 0.01);
+    buses.music.gain.setTargetAtTime(base, t + 0.05, release / 3);
   }
 
   function punch(t = ctx.currentTime, db = 6, release = 0.25) {
@@ -188,8 +209,8 @@ export function createEngine(ctx, { seed = 7, volume = 0.8 } = {}) {
   }
 
   return {
-    ctx, sr, rng, noise, buses, reverb, echo, master, sum, limiter,
-    out, env, noiseSrc, track, setVolume, setMuffle, setSlowmo, duck, punch, shaper,
+    ctx, sr, rng, noise, buses, reverb, echo, master, sum, limiter, level,
+    out, env, noiseSrc, track, setVolume, setMix, setMuffle, setSlowmo, duck, punch, shaper,
     voices: () => active,
   };
 }

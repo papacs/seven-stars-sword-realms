@@ -33,6 +33,12 @@ export default async function (app) {
   const { LAYOUT } = await import('../world/layout.js');
   const BI = LAYOUT.biome, EV = LEVEL.env ?? {};
   app.level = LEVEL;
+  if (p.get('skin') !== '0') {
+    const { characterData } = await import('../character/character.js');
+    for (const kind of new Set(['hero', ...LEVEL.waves.flatMap(wave => wave.enemies)])) {
+      characterData(kind, 1, 1).catch(err => console.error('[condor] character prebuild', err));
+    }
+  }
 
   // townsfolk bodies build in the workers while the world loads (world/citizens.js)
   if (BI.citizens) import('../world/citizens.js').then((m) => m.prefetchCitizens?.()).catch(() => {});
@@ -96,7 +102,15 @@ export default async function (app) {
   const audio = await load('audio', '../audio/audio.js', 'createAudio', app);
 
   await step(0.86, '剑 · sword');
-  const game = await load('game', '../game/game.js', 'createGame', app, { env, terrain, grass, vfx, hud, audio, interaction });
+  let chapterFactory;
+  {
+    const { createCharacter } = await import('../character/character.js');
+    const skinOff = p.get('skin') === '0';
+    // The GLB bodies stay at full quality. Their hidden procedural backing shares geometry per kind;
+    // the original full-detail fallback remains available with ?skin=0.
+    chapterFactory = (opts) => createCharacter({ ...opts, seed: skinOff ? opts.seed : 1, backingLod: skinOff ? 0 : 1 });
+  }
+  const game = await load('game', '../game/game.js', 'createGame', app, { env, terrain, grass, vfx, hud, audio, interaction, createCharacter: chapterFactory });
   // phones and tablets: thumb-stick, look drag and brush buttons (?touch=1 forces them, ?touch=0 turns them off)
   if (game && hud) await load('touch', '../ui/touch.js', 'createTouchControls', app, { game, hud });
 
@@ -118,6 +132,14 @@ export default async function (app) {
   window.__full = { env, terrain, grass, vfx, hud, audio, game, interaction, rain, citizens, level: LEVEL };
   // the level's own weather beats (lightning + thunder), and the next-level link on the victory screen
   await load('level', '../levels/runtime.js', 'createLevelRuntime', app, { env, level: LEVEL });
+  if (game && LEVEL.id === 'niujia') {
+    await step(0.97, '村 · 故事与镜头');
+    const { createCondorChapter } = await import('../condor/chapter.js');
+    await createCondorChapter(app, game);
+  } else if (game) {
+    const { createSwordSandbox } = await import('../condor/sandbox.js');
+    createSwordSandbox(app, game);
+  }
   app.progress(1, '');
   await app.ready();
 }

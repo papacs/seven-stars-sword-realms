@@ -30,12 +30,13 @@ import * as SFX from './sfx.js';
 import * as SFX2 from './sfx2.js';
 import { createWeather } from './weather.js';
 import { createCrowd } from './crowd.js';
+import { createAudioSession } from './session.js';
 
 const EVENTS = ['game:state', 'wave:start', 'wave:clear', 'player:hp', 'player:hurt', 'player:death', 'player:step', 'player:dodge',
   'player:evade', 'player:parry', 'player:parried', 'player:charged', 'player:land', 'sword:whoosh', 'sword:clash', 'enemy:hit',
   'enemy:death', 'enemy:parried', 'enemy:telegraph', 'enemy:posture', 'enemy:phase', 'enemy:step', 'enemy:spawn', 'lockon', 'special',
   'mood', 'ui:sfx', 'enemy:fall', 'enemy:shoot', 'enemy:qi', 'enemy:shieldblock', 'enemy:shieldbreak', 'arrow:pass', 'arrow:land',
-  'player:execute', 'weather', 'thunder', 'crowd'];
+  'player:execute', 'weather', 'thunder', 'crowd', 'chapter:modal', 'chapter:complete'];
 // voices: base pitch (Hz) per kind; each actor id gets its own offset
 const VOICE = { hero: 116, bandit: 108, bandit_heavy: 86, spearman: 112, archer: 124, shieldman: 95, swordmaster: 98 };
 const WEIGHT = { bandit_heavy: 1.6, spearman: 1.3, shieldman: 1.2, swordmaster: 1, bandit: 1.1, archer: 1.1 };
@@ -54,17 +55,17 @@ const MAX_VOICES = 110;      // one-shot voices before low-priority sounds are s
  * The event → sound mapping, shared by the live game and offline renders.
  * listener: { pos: Vector3, right: Vector3 } in world space. Returns { handle(type, p, t), tick(now, dt, ctl), S }.
  */
-function createDirector(E, amb, music, listener, { pathAt = null, voices = true } = {}) {
+export function createDirector(E, amb, music, listener, { pathAt = null, voices = true } = {}) {
   const S = {
     state: 'boot', wave: false, boss: false, alive: new Set(), lowHp: false, tele: 0, moveSpeed: 0, lastStep: -9,
     mood: 'golden', lastWhoosh: -9, lastEnemyStep: -9, lastClash: -9, dead: false,
-    voiceAt: new Map(), lastEnemyVoice: -9, lastWhiz: -9, rain: 0,
+    voiceAt: new Map(), lastEnemyVoice: -9, lastWhiz: -9, rain: 0, dialogue: false, voices,
   };
   const weather = createWeather(E);   // builds its nodes on the first rain / thunder
   const crowd = createCrowd(E);       // builds its nodes on the first crowd event (the town level)
   // one voice per actor at a time; enemy grunts are thinned so a brawl doesn't turn into a choir
   function say(id, kind, shape, pos, { force = false, gainK = 1 } = {}) {
-    if (!voices) return;
+    if (!S.voices) return;
     const last = S.voiceAt.get(id) ?? -9;
     const hero = kind === 'hero';
     if (!force && t0() - last < (hero ? 0.22 : 0.4)) return;
@@ -91,11 +92,12 @@ function createDirector(E, amb, music, listener, { pathAt = null, voices = true 
 
   function musicForPlay(now) {
     if (S.dead) return;
-    music.setState(S.wave ? (S.boss ? 'boss' : 'battle') : 'calm', now);
+    music.setState(!S.dialogue && S.wave ? (S.boss ? 'boss' : 'battle') : 'calm', now);
   }
 
   function handle(type, p = {}, t = E.ctx.currentTime) {
     _now = t;
+    if ((S.dialogue || S.state === 'paused') && !['game:state', 'wave:start', 'wave:clear', 'chapter:modal', 'chapter:complete', 'player:hp', 'mood', 'weather', 'enemy:spawn', 'enemy:death', 'ui:sfx'].includes(type)) return;
     switch (type) {
       // ---------------- flow ----------------
       case 'game:state': {
@@ -111,8 +113,15 @@ function createDirector(E, amb, music, listener, { pathAt = null, voices = true 
       case 'wave:start':
         S.wave = true; S.boss = !!p.boss; S.dead = false;
         music.setState(S.boss ? 'boss' : 'battle', t);
-        music.sting(S.boss ? 'boss' : 'wave', t);
+        if (!p.silent) music.sting(S.boss ? 'boss' : 'wave', t);
         break;
+      case 'chapter:modal':
+        S.dialogue = !!p.open;
+        musicForPlay(t);
+        amb.setLevel(p.open ? 0.45 : 0.85, t);
+        break;
+      case 'chapter:complete':
+        S.wave = false; S.boss = false; music.setState('victory', t); break;
       case 'wave:clear':
         S.wave = false;
         if (p.boss) break;                               // the final kill already silenced the score
@@ -133,6 +142,7 @@ function createDirector(E, amb, music, listener, { pathAt = null, voices = true 
       case 'weather': if (p.rain !== undefined) { S.rain = clamp(+p.rain || 0, 0, 1); weather.setRain(S.rain, t); } break;
       case 'thunder': weather.thunder(t + Math.max(0, p.delay ?? 0), { strength: p.strength ?? 0.7, pan: p.pan ?? 0 }); break;
       case 'crowd': {
+        if (!S.voices) { crowd.set(t, { calm: 0, panic: 0, scream: 0 }, place(p.pos), null); break; }
         const cp = p.call ? { ...place(p.call) } : null;
         crowd.set(t, p, { ...place(p.pos) }, cp);
         break;
@@ -273,54 +283,79 @@ export function createAudio(app, { autostart = app?.params?.has?.('audio') ?? fa
   const cam = app.camera;
   const listener = { pos: new THREE.Vector3(), right: new THREE.Vector3(1, 0, 0) };
   const wind = { gust: 1, gustAhead: 1, flutter: 0, strength: 1, pan: 0, budget: 3 };
-  const pending = [];                    // bus events before the context exists: only state-like ones are kept
-  let ctx = null, E = null, amb = null, music = null, dir = null, starting = null, volume = readVolume();
+  const retained = new Map([['game:state', { state: 'title' }], ['weather', { rain: app.level?.env?.rain ?? 0 }]]), living = new Map();
+  let wasRunning = false;
+  const mix = { music: 0.6, sfx: 0.95, amb: 0.4, ui: 0.8, voices: false };
+  try {
+    const saved = JSON.parse(localStorage.getItem('wx.mix') || '{}');
+    for (const key of ['music', 'sfx', 'amb', 'ui']) if (Number.isFinite(saved[key])) mix[key] = clamp(saved[key], 0, 1);
+    if (typeof saved.voices === 'boolean') mix.voices = saved.voices;
+  } catch { /* invalid preferences use the audible defaults */ }
+  let E = null, amb = null, music = null, dir = null, volume = readVolume(), muted = false;
+  try { muted = localStorage.getItem('wx.muted') === 'true'; } catch { /* optional */ }
   const pathAt = (x, z) => (app.world?.pathAt ? app.world.pathAt(x, z) : null);
 
-  async function start() {
-    if (starting) return starting;
-    starting = (async () => {
+  const session = createAudioSession({
+    createContext() {
       const AC = window.AudioContext || window.webkitAudioContext;
       if (!AC) throw new Error('WebAudio unavailable');
-      ctx = new AC({ latencyHint: 'interactive' });
-      E = createEngine(ctx, { seed: 7, volume: taper(volume) });
+      return new AC({ latencyHint: 'interactive' });
+    },
+    build(ctx) {
+      E = createEngine(ctx, { seed: 7, volume: muted ? 0 : taper(volume) });
+      E.setMix(mix);
       amb = createAmbience(E);
       music = createMusic(E);
-      dir = createDirector(E, amb, music, listener, { pathAt, voices: app?.params?.get?.('voice') !== '0' });
-      if (ctx.state !== 'running') await ctx.resume().catch(() => {});
-      // replay the state the game is already in (title / playing / wave …)
-      for (const [type, p] of pending) dir.handle(type, p, ctx.currentTime);
-      pending.length = 0;
-      if (dir.S.state === 'boot') music.setState('title', ctx.currentTime);
-      sys.started = true;
-      return ctx;
-    })().catch((e) => { console.warn('[audio] start failed', e); starting = null; });
-    return starting;
+      dir = createDirector(E, amb, music, listener, { pathAt, voices: mix.voices && app?.params?.get?.('voice') !== '0' });
+      return E;
+    },
+    isHidden: () => document.hidden,
+    onState(state) {
+      const running = state.ready && state.state === 'running' && !document.hidden;
+      if (running && !wasRunning) restoreFlow();
+      wasRunning = running;
+      bus.emit('audio:status', state);
+    },
+    onError: e => console.warn('[audio] recovery needed:', e?.message ?? e),
+  });
+  function restoreFlow() {
+      const ctx = session.ctx;
+      if (!dir || !ctx) return;
+      dir.S.wave = false; dir.S.boss = false; dir.S.alive.clear();
+      // Restore the current situation once, never a history of old waves and old combat sounds.
+      for (const type of ['mood', 'weather', 'game:state', 'wave:start', 'chapter:modal', 'player:hp', 'chapter:complete']) {
+        const value = retained.get(type); if (value) dir.handle(type, { ...value, silent: true }, ctx.currentTime);
+      }
+      for (const p of living.values()) dir.handle('enemy:spawn', p, ctx.currentTime);
   }
+  const start = () => session.start();
 
   // first user gesture starts (or resumes) audio
-  const gesture = () => {
-    if (!ctx) start();
-    else if (ctx.state === 'suspended') ctx.resume().catch(() => {});
-  };
+  const gesture = () => { if (!session.graph || session.ctx?.state !== 'running') void start(); };
   const gestureOpts = { capture: true, passive: true };
   for (const ev of ['pointerdown', 'keydown', 'touchend']) addEventListener(ev, gesture, gestureOpts);
-  const onVis = () => { if (!ctx) return; if (document.hidden) ctx.suspend().catch(() => {}); else if (sys.started) ctx.resume().catch(() => {}); };
+  const onVis = () => { if (document.hidden) wasRunning = false; if (session.ctx) void session.sync(); };
   document.addEventListener('visibilitychange', onVis);
 
   // bus → director (or remember the latest flow state until the context exists)
-  const KEEP = new Set(['game:state', 'wave:start', 'wave:clear', 'mood', 'player:hp', 'enemy:spawn', 'enemy:death', 'weather']);
+  const KEEP = new Set(['game:state', 'wave:start', 'mood', 'player:hp', 'weather', 'chapter:modal', 'chapter:complete']);
   const offs = EVENTS.map((type) => bus.on(type, (p) => {
-    if (dir && ctx.state !== 'closed') { dir.handle(type, p, ctx.currentTime); return; }
-    if (!KEEP.has(type)) return;
-    pending.push([type, p]);
-    if (pending.length > 64) pending.splice(0, pending.length - 64);
+    if (KEEP.has(type)) retained.set(type, { ...p });
+    if (type === 'wave:clear') { retained.delete('wave:start'); living.clear(); }
+    if (type === 'wave:start') retained.delete('chapter:complete');
+    if (type === 'enemy:spawn') living.set(p.id, { ...p });
+    if (type === 'enemy:death') living.delete(p.id);
+    if (type === 'game:state' && ['title', 'defeat'].includes(p.state)) { retained.delete('wave:start'); retained.delete('chapter:complete'); living.clear(); }
+    const ctx = session.ctx;
+    // Suspended/hidden contexts must never accumulate transient hits, grunts, footsteps or thunder.
+    if (session.graph && ctx?.state === 'running' && !document.hidden) dir.handle(type, p, ctx.currentTime);
   }));
   offs.push(bus.on('ui:volume', (p) => sys.setVolume(p.value)));
 
   const _m = new THREE.Vector3();
   function update(dt, t, _app, rawDt = dt) {
-    if (!dir || ctx.state !== 'running') return;
+    const ctx = session.ctx;
+    if (!session.graph || !dir || ctx?.state !== 'running' || document.hidden) return;
     const d = Math.min(rawDt ?? dt, 0.1);
     // listener = the camera
     cam.updateMatrixWorld();
@@ -341,22 +376,41 @@ export function createAudio(app, { autostart = app?.params?.has?.('audio') ?? fa
   }
 
   const sys = {
-    update, start, started: false,
-    get ctx() { return ctx; }, get engine() { return E; }, get music() { return music; }, get ambience() { return amb; },
+    update, start,
+    get started() { return !!session.graph; },
+    get ctx() { return session.ctx; }, get engine() { return E; }, get music() { return music; }, get ambience() { return amb; },
     get volume() { return volume; },
+    get muted() { return muted || volume === 0; }, get mix() { return { ...mix }; },
     setVolume(v) {
       volume = clamp(+v || 0, 0, 1);
       try { localStorage.setItem('wx.volume', volume.toFixed(3)); } catch { /* ignore */ }
-      E?.setVolume(taper(volume));
+      E?.setVolume(muted ? 0 : taper(volume));
     },
-    play(type, p = {}) { dir?.handle(type, p, ctx.currentTime); },
-    stats: () => ({ started: sys.started, state: ctx?.state ?? 'none', voices: E?.voices() ?? 0, music: music?.stats() ?? null, dir: dir ? { state: dir.S.state, alive: dir.S.alive.size, lowHp: dir.S.lowHp } : null }),
+    setMuted(value) {
+      muted = !!value;
+      if (!muted && volume === 0) sys.setVolume(.65);
+      E?.setVolume(muted ? 0 : taper(volume));
+      try { localStorage.setItem('wx.muted', String(muted)); } catch { /* optional */ }
+    },
+    setMix(values) {
+      for (const key of ['music', 'sfx', 'amb', 'ui']) if (Number.isFinite(values[key])) mix[key] = clamp(values[key], 0, 1);
+      if (typeof values.voices === 'boolean') mix.voices = values.voices;
+      if (dir) dir.S.voices = mix.voices;
+      E?.setMix(mix);
+      try { localStorage.setItem('wx.mix', JSON.stringify(mix)); } catch { /* optional */ }
+    },
+    async recover() {
+      session.reset(); E = amb = music = dir = null;
+      return start();
+    },
+    play(type, p = {}) { const ctx = session.ctx; if (session.graph && ctx?.state === 'running' && !document.hidden) dir?.handle(type, p, ctx.currentTime); },
+    stats: () => ({ started: sys.started, state: session.ctx?.state ?? 'none', error: session.error, muted, volume, mix: { ...mix }, level: session.ctx?.state === 'running' && E ? E.level() : { rms: 0, peak: 0 }, voices: E?.voices() ?? 0, music: music?.stats() ?? null, dir: dir ? { state: dir.S.state, dialogue: dir.S.dialogue, alive: dir.S.alive.size, lowHp: dir.S.lowHp } : null }),
     dispose() {
       offs.forEach((f) => f());
       for (const ev of ['pointerdown', 'keydown', 'touchend']) removeEventListener(ev, gesture, gestureOpts);
       document.removeEventListener('visibilitychange', onVis);
       app.remove(sys);
-      ctx?.close?.();
+      session.dispose();
     },
   };
   app.add(sys);

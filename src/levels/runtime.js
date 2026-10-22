@@ -66,7 +66,8 @@ export function createLevelRuntime(app, { env = null, level } = {}) {
   if (qual && !hud.querySelector('.pause .chap')) {
     const row = document.createElement('div');
     row.className = 'qual chap';
-    row.innerHTML = '<b>章</b>' + LEVEL_ORDER.map((id) => `<span class="qo${id === level.id ? ' on' : ''}" data-level="${id}">${LEVELS[id].title}</span>`).join('') + '<i>chapter</i>';
+    const names = { niujia: '剧情·牛家村', steppe: '演武·草原', bamboo: '演武·竹林', town: '演武·边城' };
+    row.innerHTML = '<b>境</b>' + LEVEL_ORDER.map((id) => `<span class="qo${id === level.id ? ' on' : ''}" data-level="${id}">${names[id] ?? LEVELS[id].title}</span>`).join('') + '<i>realms</i>';
     qual.after(row);
     row.addEventListener('click', (e) => {
       const id = e.target?.closest?.('[data-level]')?.dataset.level;

@@ -269,7 +269,7 @@ export class Combat {
     const tan = this._tangent(e, _t);
     if (P.iframes) {
       // clean evade: a breath of slow-mo when the dodge was late (just-frame)
-      if (P.clipT < 0.2) { this.slowmo(0.55, 0.12, 0.03, 0.25); bus.emit('player:evade', { id: e.id, perfect: true }); }
+      this.awardEvade(P, e.id);
       g.log('evade', e.id);
       return;
     }
@@ -436,12 +436,14 @@ export class Combat {
   }
 
   specialStart(P) {
+    this.game.swordArts?.prepare();
     setWindStrength(2.6, 0.4); this._windRestore = 2.4;
     this.kick({ exposure: 0.12, ms: 200 });
     this.game.camera.shake(0.2);
   }
 
   fireQi(P) {
+    if (this.game.swordArts) return this.game.swordArts.fireQi(P, this);
     const f = P.forward(_p).clone();
     const origin = P.pos.clone(); origin.y += 1.1; origin.addScaledVector(f, 0.8);
     let handle = null;
@@ -482,10 +484,10 @@ export class Combat {
       for (const e of this.game.enemies) {
         if (!e.alive || !e.active || q.hit.has(e)) continue;
         _q.set(e.pos.x, q.pos.y, e.pos.z);
-        const r = 1.1 + e.radius;
+        const r = (q.radius ?? 1.1) + e.radius;
         if (pointSegDist2(_q, q.prev, q.pos) > r * r) continue;
         q.hit.add(e);
-        const s = { damage: 58, posture: 60, kind: 'special', reach: 99, arc: 9, riposte: false };
+        const s = { damage: q.damage ?? 58, posture: q.posture ?? 60, kind: 'special', reach: 99, arc: 9, riposte: false };
         _p.copy(e.pos); _p.y += 1.2;
         this.playerHits(q.owner, e, _p, 'torso', s);
       }
@@ -594,12 +596,19 @@ export class Combat {
     }
   }
 
+  awardEvade(P, id, arrow = false) {
+    if (P.state !== 'dodge' || P.clipT >= .2 || P.perfectEvade) return;
+    P.perfectEvade = true;
+    this.slowmo(0.55, 0.12, 0.03, 0.25);
+    bus.emit('player:evade', { id, perfect: true, arrow });
+  }
+
   _arrowHits(a, P) {
     const g = this.game;
     const dirX = a.vel.x, dirZ = a.vel.z, n = Math.hypot(dirX, dirZ) || 1;
     const point = a.pos.clone();
     const tan = a.vel.clone().normalize();
-    if (P.iframes) { g.log('evade', 'arrow'); return; }
+    if (P.iframes) { this.awardEvade(P, a.owner.id, true); g.log('evade', 'arrow'); return; }
     const facing = (Math.sin(P.yaw) * dirX / n + Math.cos(P.yaw) * dirZ / n) < 0.25;
     if ((P.blocking || P.state === 'parry') && facing) {
       const perfect = P.state === 'parry' || P.clock - P.blockPressT <= FEEL.parryWindow;

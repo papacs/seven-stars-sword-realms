@@ -42,8 +42,9 @@ const TOUCH_LOOK_RATE = 28;   // 1/s: a touch drag reaches the camera over a few
 function makeButton() { return { down: false, pressed: false, released: false, held: 0, pressT: -1, _p: 0, _r: 0, _raw: false, _pad: false, _vd: false, _vp: 0, _td: false }; }
 
 export class Input {
-  constructor(canvas, { sensitivity = 0.0022 } = {}) {
+  constructor(canvas, { sensitivity = 0.0022, pointerLock = true } = {}) {
     this.canvas = canvas;
+    this.pointerLock = pointerLock;
     this.move = new THREE.Vector2();
     this.look = new THREE.Vector2();
     this.zoom = 0;
@@ -158,6 +159,7 @@ export class Input {
   }
 
   requestLock() {
+    if (!this.pointerLock) return;
     const c = this.canvas;
     if (!c?.requestPointerLock || this.locked || this.touch.enabled) return;
     try {

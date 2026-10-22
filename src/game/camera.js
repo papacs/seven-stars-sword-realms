@@ -24,8 +24,8 @@ export const CAM = {
   pivotH: 1.45,          // chest pivot height
   shoulder: 0.35,        // pivot offset to the right (swapped when the lock target is on the right)
   dist: 4.4, distMin: 2.8, distMax: 7, lockDist: 5.4,
-  pitch: 0.08, pitchMin: -0.35, pitchMax: 0.9,
-  compose: 0.068,        // view tilt up (rad) at the default pitch: horizon on the lower third, sky ≈ 58 % of the frame
+  pitch: 0.22, pitchMin: -0.35, pitchMax: 0.9,
+  compose: -0.13,        // lower the combat aim: footwork and world-space sword formations stay readable
   lockOffset: 0.3,       // lock-on: heading offset (rad) that puts the target beside the hero, not behind him
   follow: 9,             // pivot position smoothing rate
   aimRate: 14,           // lock-on aim smoothing rate
@@ -66,6 +66,18 @@ export class CombatCamera {
   get heading() { return this.yaw; }
 
   snap() { this.first = true; }
+  resetBehind(heading = this.sunHeading) {
+    this.orbit = null; this.orbitT = 0;
+    this.pitch = this.pitchT = CAM.pitch;
+    this.dist = this.distT = this.userDist = this.collDist = CAM.dist;
+    this.lockSmooth = 0; this.lockSide = 0; this.side = 1; this.avoid = 0;
+    this.bump = this.fovKickV = this.fovPunchV = this.fovSprint = this.zoomAmt = 0;
+    this.fovNow = CAM.fov; this.zoomT = 9;
+    this.kickP?.set(0, 0, 0); this.kickV?.set(0, 0, 0);
+    this.lead.set(0, 0, 0); this.blendPos.set(0, 0, 0); this.blendAim.set(0, 0, 0);
+    this.setMode('follow', { heading, force: true, blend: 8 });
+    this.snap();
+  }
   shake(k) { this.bump = Math.min(1.2, this.bump + k); }
   /** Directional hit kick: the lens is shoved along the blow (world dir) and springs back. */
   kickDir(dir, k = 1) {
@@ -292,7 +304,11 @@ export class CombatCamera {
     const pp = player.pos;
     const t = this.clock;
     const ground = (x, z) => this.heightAt(x, z);
-    if (this.mode === 'title') {
+    if (this.mode === 'story') {
+      this.desPos.fromArray(o.pos);
+      this.desAim.fromArray(o.target);
+      this.desPos.x += Math.sin(this.modeT * 0.15) * 0.09;
+    } else if (this.mode === 'title') {
       // low, slow, into the sun; the hero on the left third with the sky filling the frame
       const h = this.sunHeading + 0.06 * Math.sin(0.05 * t) + 0.03;
       const dist = 5.6 + 0.6 * Math.sin(0.07 * t + 1);

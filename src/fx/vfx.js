@@ -62,6 +62,8 @@ ${ATMOS_GLSL}
 ${FX_COMMON}
 ${FX_FRAG}
 uniform float uAge, uLife, uTimeQ;
+uniform vec3 uTint;
+uniform float uTintMix;
 varying vec2 vUv; varying vec3 vWp;
 float h(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float n2(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
@@ -75,7 +77,8 @@ void main() {
   float k = along * (edge * streak * 0.8 + core * 1.4);
   float life = 1.0 - smoothstep(0.55, 1.0, uAge / uLife);
   float born = smoothstep(0.0, 0.06, uAge);
-  vec3 col = fx_hotCore() * (2.2 + 5.0 * core) * k * life * born;
+  vec3 tint = mix(uTint, vec3(1.0), core * 0.75 * uTintMix);
+  vec3 col = mix(fx_hotCore(), vec3(1.1), uTintMix) * tint * (2.2 + 5.0 * core) * k * life * born;
   // ink-wash fringe: a darker, cooler rim on the trailing side
   col = mix(col, col * vec3(0.6, 0.75, 1.0), 1.0 - vUv.y);
   gl_FragColor = vec4(col, 1.0);
@@ -127,7 +130,7 @@ export function createVFX(app, { interaction } = {}) {
 
   // ---- qi waves
   const qiGeo = crescentGeometry();
-  const qiMaterial = () => fxMaterial({ vs: QI_VS, fs: QI_FS, additive: true, uniforms: { uAge: { value: 0 }, uLife: { value: 0.8 }, uTimeQ: { value: 0 } } });
+  const qiMaterial = () => fxMaterial({ vs: QI_VS, fs: QI_FS, additive: true, uniforms: { uAge: { value: 0 }, uLife: { value: 0.8 }, uTimeQ: { value: 0 }, uTint: { value: new THREE.Color(1, 1, 1) }, uTintMix: { value: 0 } } });
   // A permanent, invisible (fully faded, zero-size) crescent keeps the qi program compiled and alive: every wave
   // creates and disposes its own material, and without a live user three would delete and re-link the program
   // (a ~60 ms hitch on each special).
@@ -210,9 +213,12 @@ export function createVFX(app, { interaction } = {}) {
       lamps.flash(new THREE.Vector3(x, y + 0.5, z), [1.0, 0.7, 0.4], 2 + 2 * strength, 0.15);
     },
 
-    qiWave(origin, dir) {
+    qiWave(origin, dir, { color = null, width = 1, speed = 24, life = 0.8 } = {}) {
       const mat = qiMaterial();
+      if (color) { mat.uniforms.uTint.value.set(color); mat.uniforms.uTintMix.value = 1; }
+      mat.uniforms.uLife.value = life;
       const mesh = new THREE.Mesh(qiGeo, mat);
+      mesh.scale.x = width;
       mesh.layers.set(1); mesh.frustumCulled = false; mesh.renderOrder = 25;
       const f = new THREE.Vector3(dir.x, 0, dir.z).normalize();
       mesh.position.copy(origin);
@@ -221,7 +227,7 @@ export function createVFX(app, { interaction } = {}) {
       app.scene.add(mesh);
       const light = lamps.add({ pos: origin.clone(), color: [0.9, 0.85, 0.7], weight: 6 });
       const w = {
-        mesh, mat, light, age: 0, life: 0.8, speed: 24, dir: f, pos: mesh.position, dead: false, last: origin.clone(),
+        mesh, mat, light, age: 0, life, speed, dir: f, pos: mesh.position, dead: false, last: origin.clone(),
         update(dt) {
           if (w.dead) return;
           w.age += dt;

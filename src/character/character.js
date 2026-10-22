@@ -297,8 +297,8 @@ const _q = new THREE.Quaternion(), _s = new THREE.Vector3(), _m = new THREE.Matr
 /**
  * @param {{kind?: 'hero'|'bandit'|'bandit_heavy'|'swordmaster', seed?: number}} opts
  */
-export async function createCharacter({ kind = 'hero', seed = 1 } = {}) {
-  const [data, matsU] = await Promise.all([characterData(kind, seed), (async () => { const U = createCharUniforms(); return { U, M: await createCharMaterials(U) }; })()]);
+export async function createCharacter({ kind = 'hero', seed = 1, backingLod = 0 } = {}) {
+  const [data, matsU] = await Promise.all([characterData(kind, seed, backingLod), (async () => { const U = createCharUniforms(); return { U, M: await createCharMaterials(U) }; })()]);
   const { U, M } = matsU;
   const s = data.scale;
   const rig = createSkeleton(s);
