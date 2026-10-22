@@ -1,0 +1,9 @@
+Seven Stars Sword Realms is derived from Long Wind by jbang2004.
+Upstream: https://github.com/jbang2004/long-wind
+
+The upstream copyright and MIT license are retained in LICENSE.
+The upstream third-party asset notice is retained below without changing its terms:
+
+The MIT license covers the source code. Third-party assets keep their own
+licenses — see CREDITS.md. In particular the character models in
+public/assets/models/ are NOT covered by the MIT license.
